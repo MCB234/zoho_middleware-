@@ -8,17 +8,17 @@ app = Flask(__name__)
 ORG_ID = "47865550"
 DEPARTMENT_ID = 78127000000006907
 
-# 🔹 GET TOKEN FROM YOUR WEBHOOK (PLAIN TEXT FIX)
+# 🔹 GET TOKEN FROM YOUR WEBHOOK (PLAIN TEXT)
 def get_access_token():
     url = "https://financewebhook.myclassboard.com/GetZohoToken"
 
     try:
         res = requests.get(url)
-        token = res.text.strip().replace('"', '')   # ✅ handles plain string
+        token = res.text.strip()
 
-        if not token:
-            print("Empty token response")
-            return None
+        # remove quotes if present
+        if token.startswith('"') and token.endswith('"'):
+            token = token[1:-1]
 
         return token
 
@@ -44,22 +44,24 @@ def get_headers():
 def home():
     return "Zoho Middleware Running"
 
-# ✅ CREATE TICKET
+# ✅ CREATE TICKET (FIXED SUBJECT ISSUE)
 @app.route("/create-ticket", methods=["POST"])
 def create_ticket():
     try:
-        body = request.json
+        body = request.json or {}
+
+        print("Incoming body:", body)  # debug
 
         payload = {
-            "subject": body.get("subject"),
-            "description": body.get("description"),
+            "subject": body.get("subject") or "User Issue",
+            "description": body.get("description") or "No description provided",
             "departmentId": DEPARTMENT_ID,
             "status": body.get("status", "Open"),
             "priority": body.get("priority", "High"),
             "email": body.get("email"),
             "phone": body.get("phone"),
             "contact": {
-                "lastName": body.get("contact_name"),
+                "lastName": body.get("contact_name") or "Customer",
                 "phone": body.get("contact_phone"),
                 "email": body.get("contact_email")
             }
