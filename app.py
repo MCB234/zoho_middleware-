@@ -8,16 +8,16 @@ app = Flask(__name__)
 ORG_ID = "47865550"
 DEPARTMENT_ID = 78127000000006907
 
-# 🔹 GET TOKEN FROM YOUR WEBHOOK
+# 🔹 GET TOKEN FROM YOUR WEBHOOK (PLAIN TEXT FIX)
 def get_access_token():
     url = "https://financewebhook.myclassboard.com/GetZohoToken"
-    
+
     try:
-        res = requests.get(url).json()
-        token = res.get("access_token") or res.get("token")
+        res = requests.get(url)
+        token = res.text.strip().replace('"', '')   # ✅ handles plain string
 
         if not token:
-            print("Token error:", res)
+            print("Empty token response")
             return None
 
         return token
@@ -87,7 +87,7 @@ def get_ticket_by_number():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# 🚀 IMPORTANT FOR RENDER (PORT FIX)
+# 🚀 RENDER PORT FIX
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
