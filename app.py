@@ -8,12 +8,12 @@ app = Flask(__name__)
 ORG_ID = "47865550"
 DEPARTMENT_ID = 78127000000006907
 
-# 🔹 GET TOKEN FROM YOUR WEBHOOK (PLAIN TEXT)
+# 🔹 GET TOKEN FROM WEBHOOK (PLAIN TEXT + TIMEOUT)
 def get_access_token():
     url = "https://financewebhook.myclassboard.com/GetZohoToken"
 
     try:
-        res = requests.get(url)
+        res = requests.get(url, timeout=5)
         token = res.text.strip()
 
         # remove quotes if present
@@ -44,13 +44,13 @@ def get_headers():
 def home():
     return "Zoho Middleware Running"
 
-# ✅ CREATE TICKET (FIXED SUBJECT ISSUE)
+# ✅ CREATE TICKET
 @app.route("/create-ticket", methods=["POST"])
 def create_ticket():
     try:
         body = request.json or {}
 
-        print("Incoming body:", body)  # debug
+        print("Incoming body:", body)
 
         payload = {
             "subject": body.get("subject") or "User Issue",
@@ -68,21 +68,25 @@ def create_ticket():
         }
 
         url = "https://desk.zoho.com/api/v1/tickets"
-        res = requests.post(url, json=payload, headers=get_headers())
+        res = requests.post(url, json=payload, headers=get_headers(), timeout=10)
 
         return jsonify(res.json())
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# ✅ GET TICKET BY NUMBER
+# ✅ GET TICKET BY NUMBER (FIXED PARAM ISSUE)
 @app.route("/get-ticket-by-number", methods=["GET"])
 def get_ticket_by_number():
     try:
-        ticket_number = request.args.get("ticketNumber")
+        # 🔥 handles both cases
+        ticket_number = request.args.get("ticketNumber") or request.args.get("Ticketnumber")
+
+        if not ticket_number:
+            return jsonify({"error": "ticketNumber is required"}), 400
 
         url = f"https://desk.zoho.com/api/v1/tickets/search?ticketNumber={ticket_number}"
-        res = requests.get(url, headers=get_headers())
+        res = requests.get(url, headers=get_headers(), timeout=10)
 
         return jsonify(res.json())
 
