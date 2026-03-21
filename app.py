@@ -1,42 +1,27 @@
 from flask import Flask, request, jsonify
 import requests
-import time
 
 app = Flask(__name__)
 
-CLIENT_ID = "YOUR_CLIENT_ID"
-CLIENT_SECRET = "YOUR_CLIENT_SECRET"
-REFRESH_TOKEN = "YOUR_REFRESH_TOKEN"
-ORG_ID = "YOUR_ORG_ID"
-DEPARTMENT_ID = "YOUR_DEPARTMENT_ID"
+# 🔹 CONFIG
+ORG_ID = "47865550"
+DEPARTMENT_ID = 78127000000006907
 
-access_token = None
-token_expiry = 0
-
+# 🔹 GET TOKEN FROM YOUR WEBHOOK
 def get_access_token():
-    global access_token, token_expiry
+    url = "https://financewebhook.myclassboard.com/GetZohoToken"
+    res = requests.get(url).json()
 
-    if access_token and time.time() < token_expiry:
-        return access_token
+    # ⚠️ adjust key if needed
+    token = res.get("access_token") or res.get("token")
 
-    url = "https://accounts.zoho.in/oauth/v2/token"
-    data = {
-        "refresh_token": REFRESH_TOKEN,
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "grant_type": "refresh_token"
-    }
+    if not token:
+        print("Token response error:", res)
+        raise Exception("Failed to get access token")
 
-    response = requests.post(url, data=data)
-    res = response.json()
+    return token
 
-    access_token = res.get("access_token")
-    expires_in = res.get("expires_in", 3600)
-
-    token_expiry = time.time() + expires_in - 60
-
-    return access_token
-
+# 🔹 HEADERS
 def get_headers():
     return {
         "Authorization": f"Zoho-oauthtoken {get_access_token()}",
@@ -44,10 +29,7 @@ def get_headers():
         "Content-Type": "application/json"
     }
 
-@app.route("/")
-def home():
-    return "Zoho Middleware Running"
-
+# ✅ CREATE TICKET
 @app.route("/create-ticket", methods=["POST"])
 def create_ticket():
     body = request.json
@@ -72,6 +54,7 @@ def create_ticket():
 
     return jsonify(res.json())
 
+# ✅ GET TICKET BY NUMBER
 @app.route("/get-ticket-by-number", methods=["GET"])
 def get_ticket_by_number():
     ticket_number = request.args.get("ticketNumber")
@@ -81,5 +64,11 @@ def get_ticket_by_number():
 
     return jsonify(res.json())
 
+# ✅ HEALTH CHECK
+@app.route("/")
+def home():
+    return "Zoho Middleware Running"
+
+# 🚀 RUN
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
