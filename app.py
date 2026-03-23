@@ -8,22 +8,37 @@ app = Flask(__name__)
 ORG_ID = "47865550"
 DEPARTMENT_ID = 78127000000006907
 
-# 🔹 GET TOKEN FROM WEBHOOK (PLAIN TEXT + TIMEOUT)
+# 🔹 TOKEN CACHE (to avoid delay every request)
+cached_token = None
+token_time = 0
+
 def get_access_token():
-    url = "https://financewebhook.myclassboard.com/GetZohoToken"
+    global cached_token, token_time
 
     try:
-        res = requests.get(url, timeout=5)
+        import time
+
+        # reuse token for 50 minutes
+        if cached_token and (time.time() - token_time < 3000):
+            return cached_token
+
+        res = requests.get(
+            "https://financewebhook.myclassboard.com/GetZohoToken",
+            timeout=5
+        )
+
         token = res.text.strip()
 
-        # remove quotes if present
         if token.startswith('"') and token.endswith('"'):
             token = token[1:-1]
+
+        cached_token = token
+        token_time = time.time()
 
         return token
 
     except Exception as e:
-        print("Webhook error:", str(e))
+        print("Token error:", str(e))
         return None
 
 # 🔹 HEADERS
@@ -39,18 +54,19 @@ def get_headers():
         "Content-Type": "application/json"
     }
 
-# ✅ HEALTH CHECK
+# ✅ HEALTH
 @app.route("/")
 def home():
     return "Zoho Middleware Running"
 
-# ✅ CREATE TICKET
+# ✅ CREATE TICKET (FINAL FIXED)
 @app.route("/create-ticket", methods=["POST"])
 def create_ticket():
     try:
         body = request.json or {}
-
         print("Incoming body:", body)
+
+        headers = get_headers()
 
         payload = {
             "subject": body.get("subject") or "User Issue",
@@ -67,33 +83,52 @@ def create_ticket():
             }
         }
 
-        url = "https://desk.zoho.com/api/v1/tickets"
-        res = requests.post(url, json=payload, headers=get_headers(), timeout=10)
+        print("Payload:", payload)
 
-        return jsonify(res.json())
+        url = "https://desk.zoho.com/api/v1/tickets"
+
+        res = requests.post(
+            url,
+            json=payload,
+            headers=headers,
+            timeout=10
+        )
+
+        print("Zoho response:", res.text)
+
+        return jsonify(res.json()), res.status_code
+
+    except requests.exceptions.Timeout:
+        return jsonify({"error": "Zoho API timeout"}), 504
 
     except Exception as e:
+        print("ERROR:", str(e))
         return jsonify({"error": str(e)}), 500
 
-# ✅ GET TICKET BY NUMBER (FIXED PARAM ISSUE)
+# ✅ GET TICKET (FINAL FIXED)
 @app.route("/get-ticket-by-number", methods=["GET"])
 def get_ticket_by_number():
     try:
-        # 🔥 handles both cases
         ticket_number = request.args.get("ticketNumber") or request.args.get("Ticketnumber")
 
         if not ticket_number:
             return jsonify({"error": "ticketNumber is required"}), 400
 
-        url = f"https://desk.zoho.com/api/v1/tickets/search?ticketNumber={ticket_number}"
-        res = requests.get(url, headers=get_headers(), timeout=10)
+        headers = get_headers()
 
-        return jsonify(res.json())
+        url = f"https://desk.zoho.com/api/v1/tickets/search?ticketNumber={ticket_number}"
+
+        res = requests.get(url, headers=headers, timeout=10)
+
+        return jsonify(res.json()), res.status_code
+
+    except requests.exceptions.Timeout:
+        return jsonify({"error": "Zoho API timeout"}), 504
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# 🚀 RENDER PORT FIX
+# 🚀 RUN (RENDER READY)
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
