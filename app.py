@@ -90,13 +90,9 @@ def create_ticket():
             }
         }
 
-        print("Payload:", payload)
-
         url = "https://desk.zoho.com/api/v1/tickets"
 
         res = requests.post(url, json=payload, headers=headers, timeout=8)
-
-        print("Zoho response:", res.text)
 
         return jsonify(res.json()), res.status_code
 
@@ -104,11 +100,10 @@ def create_ticket():
         return jsonify({"error": "Zoho API timeout"}), 504
 
     except Exception as e:
-        print("ERROR:", str(e))
         return jsonify({"error": str(e)}), 500
 
 
-# ✅ GET TICKET (QUERY PARAM)
+# ✅ GET TICKET (QUERY)
 @app.route("/get-ticket-by-number", methods=["GET"])
 def get_ticket_by_number():
     try:
@@ -120,8 +115,6 @@ def get_ticket_by_number():
 
         if not ticket_number:
             return jsonify({"error": "Valid ticketNumber is required"}), 400
-
-        print("Requested Ticket:", ticket_number)
 
         headers = get_headers()
 
@@ -144,16 +137,18 @@ def get_ticket_by_number():
         return jsonify({"error": str(e)}), 500
 
 
-# ✅ 🔥 NEW: GET TICKET (PATH PARAM - FOR ELEVENLABS)
-@app.route("/get-ticket/<ticket_number>", methods=["GET"])
-def get_ticket_path(ticket_number):
+# ✅ 🔥 FINAL: GET TICKET (POST — FOR ELEVENLABS)
+@app.route("/get-ticket", methods=["POST"])
+def get_ticket_post():
     try:
-        ticket_number = str(ticket_number).strip().replace("'", "").replace('"', "")
+        body = request.json or {}
+
+        ticket_number = str(body.get("ticketNumber", "")).strip().replace("'", "").replace('"', "")
 
         if not ticket_number:
             return jsonify({"error": "Valid ticketNumber is required"}), 400
 
-        print("Requested Ticket (PATH):", ticket_number)
+        print("Requested Ticket:", ticket_number)
 
         headers = get_headers()
 
