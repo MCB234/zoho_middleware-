@@ -17,7 +17,6 @@ def get_access_token():
     global cached_token, token_time
 
     try:
-        # ✅ reuse token for ~1 hour
         if cached_token and (time.time() - token_time < 3500):
             return cached_token
 
@@ -28,7 +27,6 @@ def get_access_token():
 
         token = res.text.strip()
 
-        # remove quotes
         if token.startswith('"') and token.endswith('"'):
             token = token[1:-1]
 
@@ -42,7 +40,6 @@ def get_access_token():
     except Exception as e:
         print("Token error:", str(e))
 
-        # 🔥 fallback to old token
         if cached_token:
             return cached_token
 
@@ -97,12 +94,7 @@ def create_ticket():
 
         url = "https://desk.zoho.com/api/v1/tickets"
 
-        res = requests.post(
-            url,
-            json=payload,
-            headers=headers,
-            timeout=8   # 🔥 faster
-        )
+        res = requests.post(url, json=payload, headers=headers, timeout=8)
 
         print("Zoho response:", res.text)
 
@@ -116,7 +108,7 @@ def create_ticket():
         return jsonify({"error": str(e)}), 500
 
 
-# ✅ GET TICKET (FAST + SAFE)
+# ✅ GET TICKET (FINAL FIXED)
 @app.route("/get-ticket-by-number", methods=["GET"])
 def get_ticket_by_number():
     try:
@@ -129,21 +121,50 @@ def get_ticket_by_number():
         if not ticket_number:
             return jsonify({"error": "Valid ticketNumber is required"}), 400
 
-        print("Ticket Number:", ticket_number)
+        print("Requested Ticket:", ticket_number)
 
         headers = get_headers()
 
         url = f"https://desk.zoho.com/api/v1/tickets/search?ticketNumber={ticket_number}"
 
-        res = requests.get(
-            url,
-            headers=headers,
-            timeout=6   # 🔥 avoid 504
-        )
+        res = requests.get(url, headers=headers, timeout=6)
 
-        print("Zoho response:", res.text)
+        print("STATUS:", res.status_code)
+        print("RAW:", res.text)
 
-        return jsonify(res.json()), res.status_code
+        # 🔥 HANDLE 204
+        if res.status_code == 204:
+            return jsonify({
+                "error": "No ticket found",
+                "ticketNumber": ticket_number
+            }), 404
+
+        # 🔥 EMPTY RESPONSE
+        if not res.text or res.text.strip() == "":
+            return jsonify({
+                "error": "Empty response from Zoho"
+            }), 500
+
+        # 🔥 SAFE JSON
+        try:
+            data = res.json()
+        except:
+            return jsonify({
+                "error": "Invalid Zoho response",
+                "raw": res.text
+            }), 500
+
+        tickets = data.get("data", [])
+
+        # 🔥 EXACT MATCH FILTER
+        for ticket in tickets:
+            if str(ticket.get("ticketNumber")) == ticket_number:
+                return jsonify(ticket)
+
+        return jsonify({
+            "error": "Ticket not found in response",
+            "ticketNumber": ticket_number
+        }), 404
 
     except requests.exceptions.Timeout:
         return jsonify({"error": "Zoho API timeout"}), 504
@@ -153,7 +174,7 @@ def get_ticket_by_number():
         return jsonify({"error": str(e)}), 500
 
 
-# 🚀 RUN (RENDER READY)
+# 🚀 RUN
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
