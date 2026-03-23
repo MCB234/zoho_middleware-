@@ -108,7 +108,7 @@ def create_ticket():
         return jsonify({"error": str(e)}), 500
 
 
-# ✅ GET TICKET (FINAL FIXED)
+# ✅ GET TICKET (QUERY PARAM)
 @app.route("/get-ticket-by-number", methods=["GET"])
 def get_ticket_by_number():
     try:
@@ -129,48 +129,53 @@ def get_ticket_by_number():
 
         res = requests.get(url, headers=headers, timeout=6)
 
-        print("STATUS:", res.status_code)
-        print("RAW:", res.text)
-
-        # 🔥 HANDLE 204
         if res.status_code == 204:
-            return jsonify({
-                "error": "No ticket found",
-                "ticketNumber": ticket_number
-            }), 404
+            return jsonify({"error": "No ticket found"}), 404
 
-        # 🔥 EMPTY RESPONSE
-        if not res.text or res.text.strip() == "":
-            return jsonify({
-                "error": "Empty response from Zoho"
-            }), 500
+        data = res.json()
 
-        # 🔥 SAFE JSON
-        try:
-            data = res.json()
-        except:
-            return jsonify({
-                "error": "Invalid Zoho response",
-                "raw": res.text
-            }), 500
-
-        tickets = data.get("data", [])
-
-        # 🔥 EXACT MATCH FILTER
-        for ticket in tickets:
+        for ticket in data.get("data", []):
             if str(ticket.get("ticketNumber")) == ticket_number:
                 return jsonify(ticket)
 
-        return jsonify({
-            "error": "Ticket not found in response",
-            "ticketNumber": ticket_number
-        }), 404
-
-    except requests.exceptions.Timeout:
-        return jsonify({"error": "Zoho API timeout"}), 504
+        return jsonify({"error": "Ticket not found"}), 404
 
     except Exception as e:
-        print("ERROR:", str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+# ✅ 🔥 NEW: GET TICKET (PATH PARAM - FOR ELEVENLABS)
+@app.route("/get-ticket/<ticket_number>", methods=["GET"])
+def get_ticket_path(ticket_number):
+    try:
+        ticket_number = str(ticket_number).strip().replace("'", "").replace('"', "")
+
+        if not ticket_number:
+            return jsonify({"error": "Valid ticketNumber is required"}), 400
+
+        print("Requested Ticket (PATH):", ticket_number)
+
+        headers = get_headers()
+
+        url = f"https://desk.zoho.com/api/v1/tickets/search?ticketNumber={ticket_number}"
+
+        res = requests.get(url, headers=headers, timeout=6)
+
+        if res.status_code == 204:
+            return jsonify({"error": "No ticket found"}), 404
+
+        if not res.text:
+            return jsonify({"error": "Empty response"}), 500
+
+        data = res.json()
+
+        for ticket in data.get("data", []):
+            if str(ticket.get("ticketNumber")) == ticket_number:
+                return jsonify(ticket)
+
+        return jsonify({"error": "Ticket not found"}), 404
+
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
