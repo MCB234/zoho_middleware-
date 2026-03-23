@@ -17,37 +17,44 @@ def get_access_token():
     global cached_token, token_time
 
     try:
-        # reuse token for 50 mins
-        if cached_token and (time.time() - token_time < 3000):
+        # ✅ reuse token for ~1 hour
+        if cached_token and (time.time() - token_time < 3500):
             return cached_token
 
         res = requests.get(
             "https://financewebhook.myclassboard.com/GetZohoToken",
-            timeout=5
+            timeout=3
         )
 
         token = res.text.strip()
 
+        # remove quotes
         if token.startswith('"') and token.endswith('"'):
             token = token[1:-1]
 
         cached_token = token
         token_time = time.time()
 
-        print("New token fetched")
+        print("Token refreshed")
 
         return token
 
     except Exception as e:
         print("Token error:", str(e))
+
+        # 🔥 fallback to old token
+        if cached_token:
+            return cached_token
+
         return None
+
 
 # 🔹 HEADERS
 def get_headers():
     token = get_access_token()
 
     if not token:
-        raise Exception("No access token received")
+        raise Exception("No access token available")
 
     return {
         "Authorization": f"Zoho-oauthtoken {token}",
@@ -55,10 +62,12 @@ def get_headers():
         "Content-Type": "application/json"
     }
 
+
 # ✅ HEALTH
 @app.route("/")
 def home():
     return "Zoho Middleware Running"
+
 
 # ✅ CREATE TICKET
 @app.route("/create-ticket", methods=["POST"])
@@ -88,7 +97,12 @@ def create_ticket():
 
         url = "https://desk.zoho.com/api/v1/tickets"
 
-        res = requests.post(url, json=payload, headers=headers, timeout=10)
+        res = requests.post(
+            url,
+            json=payload,
+            headers=headers,
+            timeout=8   # 🔥 faster
+        )
 
         print("Zoho response:", res.text)
 
@@ -101,11 +115,11 @@ def create_ticket():
         print("ERROR:", str(e))
         return jsonify({"error": str(e)}), 500
 
-# ✅ GET TICKET (FINAL FIXED)
+
+# ✅ GET TICKET (FAST + SAFE)
 @app.route("/get-ticket-by-number", methods=["GET"])
 def get_ticket_by_number():
     try:
-        # 🔥 clean handling of params
         ticket_number = (
             request.args.get("ticketNumber")
             or request.args.get("Ticketnumber")
@@ -121,7 +135,11 @@ def get_ticket_by_number():
 
         url = f"https://desk.zoho.com/api/v1/tickets/search?ticketNumber={ticket_number}"
 
-        res = requests.get(url, headers=headers, timeout=10)
+        res = requests.get(
+            url,
+            headers=headers,
+            timeout=6   # 🔥 avoid 504
+        )
 
         print("Zoho response:", res.text)
 
@@ -133,6 +151,7 @@ def get_ticket_by_number():
     except Exception as e:
         print("ERROR:", str(e))
         return jsonify({"error": str(e)}), 500
+
 
 # 🚀 RUN (RENDER READY)
 if __name__ == "__main__":
